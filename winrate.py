@@ -362,12 +362,12 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels)", expanded=True):
     st.write("**Partial Take Profit Levels**")
     c1, c2 = st.columns(2)
     with c1:
-        tp1_p = st.number_input("TP 1: Price %", value=0.3, step=0.1)
+        tp1_p = st.number_input("TP 1: Price %", value=0.0, step=0.1)
         tp2_p = st.number_input("TP 2: Price %", value=0.6, step=0.1)
         tp3_p = st.number_input("TP 3: Price %", value=0.0, step=0.1)
     with c2:
-        tp1_q = st.number_input("TP 1: Size %", value=50, step=5)
-        tp2_q = st.number_input("TP 2: Size %", value=50, step=5)
+        tp1_q = st.number_input("TP 1: Size %", value=0, step=5)
+        tp2_q = st.number_input("TP 2: Size %", value=100, step=5)
         tp3_q = st.number_input("TP 3: Size %", value=0, step=5)
     
     st.caption(f"Total Size to Close: {tp1_q + tp2_q + tp3_q}% (Should be 100%)")
