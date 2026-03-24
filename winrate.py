@@ -73,6 +73,7 @@ st.title("📈 Leveraged Trading Strategy Simulator")
 # --- Core Simulation Logic ---
 def simulate_trading_detailed(
     starting_balance,
+    risk_percent,
     win_rate_percent,
     stop_loss_percent,
     num_trades,
@@ -103,6 +104,7 @@ def simulate_trading_detailed(
     }
 
     # --- Conversions ---
+    risk_rate = risk_percent / 100.0
     win_rate = win_rate_percent / 100.0
     sl_multiplier = stop_loss_percent / 100.0
     maker_fee_rate = maker_fee_percent / 100.0
@@ -147,10 +149,14 @@ def simulate_trading_detailed(
 
         balance_before_trade = current_balance
         
-        # --- COMPOUNDING ---
+        # --- COMPOUNDING & RISK SIZING ---
         total_pnl_so_far = balance_before_trade - starting_balance
         compounded_amount = total_pnl_so_far * compound_rate
-        position_size_basis = starting_balance + compounded_amount
+        active_balance = starting_balance + compounded_amount
+        active_balance = max(0.01, active_balance)
+
+        # Apply Risk % to determine how much of the active balance is used as margin
+        position_size_basis = active_balance * risk_rate
         position_size_basis = max(0.01, position_size_basis)
 
         # --- Trade Execution (Entry) ---
@@ -274,6 +280,7 @@ def simulate_trading_detailed(
         trade_details.append({
             "Trade #": i,
             "Balance Before": round(balance_before_trade, 2),
+            "Margin Used": round(position_size_basis, 2), # Show margin used per trade
             "Outcome": outcome_str,
             "Gross P/L ($)": round(gross_pnl, 2),
             "Total Fee ($)": round(total_fee, 4),
@@ -354,6 +361,14 @@ compound_rate = st.sidebar.slider(
 )
 
 start_bal = st.sidebar.number_input("Starting Balance (USD)", value=100.0, step=100.0)
+risk_percent = st.sidebar.number_input(
+    "Margin / Risk per Trade (%)", 
+    value=100.0, 
+    step=10.0, 
+    min_value=1.0, 
+    max_value=100.0, 
+    help="Percentage of your available balance to allocate as margin for each trade."
+)
 win_rate = st.sidebar.number_input("Win Rate (%)", value=60.0, step=1.0)
 n_trades = st.sidebar.number_input("Number of Trades", value=60, step=1)
 
@@ -407,7 +422,7 @@ if run_button:
     tp_targets = [(tp1_p, tp1_q), (tp2_p, tp2_q), (tp3_p, tp3_q)]
 
     summary, df = simulate_trading_detailed(
-        start_bal, win_rate, sl_perc, n_trades,
+        start_bal, risk_percent, win_rate, sl_perc, n_trades, # Added risk_percent here
         leverage, maker_fee, taker_fee, entry_type, tp_type, sl_type,
         compound_rate, 
         win_rate_logic,
