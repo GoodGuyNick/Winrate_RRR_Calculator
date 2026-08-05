@@ -93,8 +93,8 @@ st.markdown("""
 
 st.title("📈 Leveraged Trading Strategy Simulator")
 
-# --- Kelly Criterion Optimal Leverage Helper ---
-def calculate_optimal_leverage(
+# --- Strategy Parameter Analysis & Kelly Helper ---
+def analyze_strategy_parameters(
     win_rate_percent,
     stop_loss_percent,
     tp_targets,
@@ -103,7 +103,8 @@ def calculate_optimal_leverage(
     entry_order_type,
     tp_order_type,
     sl_order_type,
-    loss_fakeout_chance_percent
+    loss_fakeout_chance_percent,
+    leverage
 ):
     W = win_rate_percent / 100.0
     SL = stop_loss_percent / 100.0
@@ -142,22 +143,34 @@ def calculate_optimal_leverage(
     net_fake_pnl = g_fake_pnl - entry_fee_rate - fake_exit_fee
     a_fake = -net_fake_pnl
     
-    # Weighted Average Loss
+    # Weighted Average Loss per unit leverage
     a_net = (1.0 - F) * a_direct + F * a_fake
+    
+    # Parameter RRR (Net Win / Net Loss)
+    param_rrr = (b_net / a_net) if a_net > 0 else None
     
     # Expected Value check
     ev = W * b_net - (1.0 - W) * a_net
     
     if ev <= 0 or b_net <= 0 or a_net <= 0:
-        return None, None
-        
-    kelly_full = (W * b_net - (1.0 - W) * a_net) / (a_net * b_net)
+        opt_full, opt_half = None, None
+    else:
+        kelly_full = (W * b_net - (1.0 - W) * a_net) / (a_net * b_net)
+        max_safe_lev = 0.95 / a_net
+        opt_full = min(kelly_full, max_safe_lev)
+        opt_half = opt_full / 2.0
     
-    max_safe_lev = 0.95 / a_net
-    kelly_full = min(kelly_full, max_safe_lev)
-    kelly_half = kelly_full / 2.0
-    
-    return kelly_full, kelly_half
+    # Return on margin %
+    net_reward_on_margin = b_net * leverage * 100.0
+    net_risk_on_margin = a_net * leverage * 100.0
+
+    return {
+        "opt_full": opt_full,
+        "opt_half": opt_half,
+        "param_rrr": param_rrr,
+        "net_reward_on_margin": net_reward_on_margin,
+        "net_risk_on_margin": net_risk_on_margin
+    }
 
 # --- Core Simulation Logic ---
 def simulate_trading_detailed(
@@ -189,7 +202,7 @@ def simulate_trading_detailed(
         "fakeout_losses": 0,
         "total_fees_paid": 0.0,
         "total_gross_profit": 0.0,
-        "total_gross_loss": 0.0
+        "total_gross_loss": 0.0,
     }
 
     # --- Conversions ---
@@ -206,11 +219,11 @@ def simulate_trading_detailed(
     tp_exit_fee_rate = maker_fee_rate if tp_order_type == "Limit (Maker)" else taker_fee_rate
     sl_exit_fee_rate = maker_fee_rate if sl_order_type == "Limit (Maker)" else taker_fee_rate
 
-    # --- Optimal Leverage Calculation ---
-    opt_lev_full, opt_lev_half = calculate_optimal_leverage(
+    # --- Parameter Sizing & Optimal Leverage Analysis ---
+    strat_analysis = analyze_strategy_parameters(
         win_rate_percent, stop_loss_percent, tp_targets,
         maker_fee_percent, taker_fee_percent, entry_order_type,
-        tp_order_type, sl_order_type, loss_fakeout_chance_percent
+        tp_order_type, sl_order_type, loss_fakeout_chance_percent, leverage
     )
 
     # --- Pre-calculate outcomes for "Exact" mode ---
@@ -394,9 +407,12 @@ def simulate_trading_detailed(
         "total_fees_paid": round(results["total_fees_paid"], 2),
         "total_gross_profit": round(results["total_gross_profit"], 2),
         "total_gross_loss": round(results["total_gross_loss"], 2),
+        "param_rrr": strat_analysis["param_rrr"],
+        "net_reward_on_margin": strat_analysis["net_reward_on_margin"],
+        "net_risk_on_margin": strat_analysis["net_risk_on_margin"],
         "balance_history": balance_history,
-        "opt_leverage_full": opt_lev_full,
-        "opt_leverage_half": opt_lev_half
+        "opt_leverage_full": strat_analysis["opt_full"],
+        "opt_leverage_half": strat_analysis["opt_half"]
     }
 
     return summary, pd.DataFrame(trade_details)
@@ -533,10 +549,21 @@ if run_button:
                     st.metric("Rec. Leverage", "N/A")
                     st.caption("Negative Expected Value Strategy")
 
-            # Row 2: Money Flow & Counts
+            # Row 2: Money Flow & Parameter RRR
             r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
-            r2c1.metric("Total Won", f"${summary['total_gross_profit']:,.0f}")
-            r2c2.metric("Total Lost", f"${summary['total_gross_loss']:,.0f}")
+            r2c1.metric("Total Won / Lost", f"${summary['total_gross_profit']:,.0f} / ${abs(summary['total_gross_loss']):,.0f}")
+            with r2c2:
+                if summary['param_rrr'] is not None:
+                    st.metric(
+                        "Actual RRR", 
+                        f"1 : {summary['param_rrr']:.2f}",
+                        help="Net Risk-to-Reward Ratio calculated strictly from TP/SL price targets, leverage, order fees, and fakeout chance."
+                    )
+                    st.caption(f"Net Win: +{summary['net_reward_on_margin']:.1f}% | Loss: -{summary['net_risk_on_margin']:.1f}%")
+                else:
+                    st.metric("Actual RRR", "N/A")
+                    st.caption("Invalid parameter targets")
+
             r2c3.metric("Fees Paid", f"${summary['total_fees_paid']:,.0f}")
             r2c4.metric("Winning Trades", f"{summary['wins']}")
             with r2c5:
