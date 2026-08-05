@@ -531,7 +531,7 @@ if run_button:
                     st.caption(f"Half: {summary['opt_leverage_half']:.1f}x | Full: {summary['opt_leverage_full']:.1f}x")
                 else:
                     st.metric("Rec. Leverage", "N/A")
-                    st.caption("Negative EV Strategy")
+                    st.caption("Negative Expected Value Strategy")
 
             # Row 2: Money Flow & Counts
             r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
