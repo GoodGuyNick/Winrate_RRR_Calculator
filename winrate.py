@@ -551,7 +551,10 @@ if run_button:
 
             # Row 2: Money Flow & Parameter RRR
             r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
-            r2c1.metric("Total Won / Lost", f"${summary['total_gross_profit']:,.0f} / ${abs(summary['total_gross_loss']):,.0f}")
+            
+            # Escaped dollar signs prevent LaTeX math parsing on Streamlit Cloud
+            r2c1.metric("Total Won / Lost", f"+$\u200b{summary['total_gross_profit']:,.0f} / -$\u200b{abs(summary['total_gross_loss']):,.0f}")
+            
             with r2c2:
                 if summary['param_rrr'] is not None:
                     st.metric(
