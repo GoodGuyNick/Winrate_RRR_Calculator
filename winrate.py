@@ -163,13 +163,17 @@ def analyze_strategy_parameters(
     # Return on margin %
     net_reward_on_margin = b_net * leverage * 100.0
     net_risk_on_margin = a_net * leverage * 100.0
+    
+    # Expected Value per trade on Margin basis (%)
+    ev_per_trade_percent = (W * net_reward_on_margin) - ((1.0 - W) * net_risk_on_margin)
 
     return {
         "opt_full": opt_full,
         "opt_half": opt_half,
         "param_rrr": param_rrr,
         "net_reward_on_margin": net_reward_on_margin,
-        "net_risk_on_margin": net_risk_on_margin
+        "net_risk_on_margin": net_risk_on_margin,
+        "ev_per_trade_percent": ev_per_trade_percent
     }
 
 # --- Core Simulation Logic ---
@@ -372,6 +376,9 @@ def simulate_trading_detailed(
 
         balance_history.append(current_balance)
         
+        # Return on margin %
+        return_on_margin_pct = (net_pnl / position_size_basis) * 100.0
+        
         trade_details.append({
             "Trade #": i,
             "Balance Before": round(balance_before_trade, 2),
@@ -380,6 +387,7 @@ def simulate_trading_detailed(
             "Gross P/L ($)": round(gross_pnl, 2),
             "Total Fee ($)": round(total_fee, 4),
             "Net P/L ($)": round(net_pnl, 2),
+            "Return on Margin (%)": round(return_on_margin_pct, 2),
             "Balance After": round(current_balance, 2)
         })
 
@@ -392,6 +400,9 @@ def simulate_trading_detailed(
     actual_fakeout_pct = 0
     if results["losses"] > 0:
         actual_fakeout_pct = (results["fakeout_losses"] / results["losses"]) * 100
+
+    actual_ev_dollars = (total_net_pnl / num_trades_executed) if num_trades_executed > 0 else 0.0
+    actual_ev_percent = (sum(t["Return on Margin (%)"] for t in trade_details) / num_trades_executed) if num_trades_executed > 0 else 0.0
 
     summary = {
         "starting_balance": starting_balance,
@@ -410,6 +421,9 @@ def simulate_trading_detailed(
         "param_rrr": strat_analysis["param_rrr"],
         "net_reward_on_margin": strat_analysis["net_reward_on_margin"],
         "net_risk_on_margin": strat_analysis["net_risk_on_margin"],
+        "ev_per_trade_percent": strat_analysis["ev_per_trade_percent"],
+        "actual_ev_dollars": round(actual_ev_dollars, 2),
+        "actual_ev_percent": round(actual_ev_percent, 2),
         "balance_history": balance_history,
         "opt_leverage_full": strat_analysis["opt_full"],
         "opt_leverage_half": strat_analysis["opt_half"]
@@ -549,10 +563,9 @@ if run_button:
                     st.metric("Rec. Leverage", "N/A")
                     st.caption("Negative Expected Value Strategy")
 
-            # Row 2: Money Flow & Parameter RRR
+            # Row 2: Money Flow, RRR, EV, Fees & Counts
             r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
             
-            # Escaped dollar signs prevent LaTeX math parsing on Streamlit Cloud
             r2c1.metric("Total Won / Lost", f"+{summary['total_gross_profit']:,.0f} / -{abs(summary['total_gross_loss']):,.0f}")
             
             with r2c2:
@@ -567,12 +580,25 @@ if run_button:
                     st.metric("Actual RRR", "N/A")
                     st.caption("Invalid parameter targets")
 
-            r2c3.metric("Fees Paid", f"${summary['total_fees_paid']:,.0f}")
-            r2c4.metric("Winning Trades", f"{summary['wins']}")
+            with r2c3:
+				# Use Probabilistic (Pure Luck) to see deviations in Actual EV and Theo EV.
+                ev_pct_sign = "+" if summary['actual_ev_percent'] >= 0 else ""
+                st.metric(
+                    "Expected Value (EV)",
+                    f"{ev_pct_sign}{summary['actual_ev_percent']:.2f}%",
+                    help="Realized average Net Profit per trade relative to margin used (after fees and fakeout chance)."
+                )
+                theo_sign = "+" if summary['ev_per_trade_percent'] >= 0 else ""
+                st.caption(f"Theo: {theo_sign}{summary['ev_per_trade_percent']:.2f}% | Avg: ${summary['actual_ev_dollars']:,.2f}")
+
+            r2c4.metric("Fees Paid", f"${summary['total_fees_paid']:,.0f}")
+
             with r2c5:
-                st.metric("Losing Trades", f"{summary['losses']}")
+                st.metric("Win / Loss Trades", f"{summary['wins']} / {summary['losses']}")
                 if summary['losses'] > 0:
                     st.caption(f"Fakeouts: {summary['actual_fakeout_pct']:.1f}% ({summary['fakeout_losses']})")
+                else:
+                    st.caption("No losing trades")
 
         st.markdown("---")
 
