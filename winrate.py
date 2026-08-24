@@ -193,9 +193,13 @@ def simulate_trading_detailed(
     win_rate_logic,
     tp_targets, 
     loss_fakeout_chance_percent,
-    fakeout_logic
+    fakeout_logic,
+    enable_skim=False,
+    harvest_threshold_percent=100.0,
+    skim_percent_of_main_bank=50.0
 ):
     current_balance = starting_balance
+    current_baseline = starting_balance
     balance_history = [starting_balance]
     trade_details = []
     
@@ -207,6 +211,7 @@ def simulate_trading_detailed(
         "total_fees_paid": 0.0,
         "total_gross_profit": 0.0,
         "total_gross_loss": 0.0,
+        "total_skimmed": 0.0,
     }
 
     # --- Conversions ---
@@ -374,6 +379,18 @@ def simulate_trading_detailed(
         current_balance += net_pnl
         if current_balance < 0: current_balance = 0
 
+        # --- Skim Vault System ---
+        skimmed_this_trade = 0.0
+        if enable_skim and harvest_threshold_percent > 0 and skim_percent_of_main_bank > 0:
+            target_balance = current_baseline * (1.0 + harvest_threshold_percent / 100.0)
+            if current_balance >= target_balance:
+                skim_amount = current_baseline * (skim_percent_of_main_bank / 100.0)
+                if skim_amount > 0:
+                    skimmed_this_trade = min(skim_amount, current_balance)
+                    current_balance -= skimmed_this_trade
+                    results["total_skimmed"] += skimmed_this_trade
+                    current_baseline = current_balance
+
         balance_history.append(current_balance)
         
         # Return on margin %
@@ -388,6 +405,7 @@ def simulate_trading_detailed(
             "Total Fee ($)": round(total_fee, 4),
             "Net P/L ($)": round(net_pnl, 2),
             "Return on Margin (%)": round(return_on_margin_pct, 2),
+            "Skimmed": round(skimmed_this_trade, 2),
             "Balance After": round(current_balance, 2)
         })
 
@@ -418,6 +436,7 @@ def simulate_trading_detailed(
         "total_fees_paid": round(results["total_fees_paid"], 2),
         "total_gross_profit": round(results["total_gross_profit"], 2),
         "total_gross_loss": round(results["total_gross_loss"], 2),
+        "total_skimmed": round(results["total_skimmed"], 2),
         "param_rrr": strat_analysis["param_rrr"],
         "net_reward_on_margin": strat_analysis["net_reward_on_margin"],
         "net_risk_on_margin": strat_analysis["net_risk_on_margin"],
@@ -457,13 +476,6 @@ run_button = st.sidebar.button("🚀 Run Simulation", type="primary")
 
 st.sidebar.subheader("Simulation Parameters")
 
-win_rate_logic = st.sidebar.radio(
-    "Win Rate Logic",
-    options=["🎲 Probabilistic (Pure Luck)", "🎯 Exact Count (Fixed)"],
-    index=1,
-    help="Probabilistic: 60% WR = 60% chance per trade. Exact: 60% WR = Exactly 60 wins out of 100 trades (shuffled)."
-)
-
 compound_rate = st.sidebar.slider(
     label="Compounding Rate (%)",
     min_value=0,
@@ -474,7 +486,31 @@ compound_rate = st.sidebar.slider(
     help="0% = Fixed Trade Size. 100% = Full Compounding."
 )
 
-start_bal = st.sidebar.number_input("Starting Balance (USD)", value=100.0, step=100.0)
+col_sb, col_lev = st.sidebar.columns(2)
+with col_sb:
+    start_bal = st.number_input("Starting Balance", value=100.0, step=100.0)
+with col_lev:
+    leverage = st.number_input("Leverage (x)", value=50, step=1)
+
+# --- Skim Vault System ---
+with st.sidebar.expander("🏦 Skim Vault System", expanded=False):
+    enable_skim = st.checkbox("Enable Skim Vault", value=False)
+    col_ht, col_sa = st.columns(2)
+    with col_ht:
+        harvest_threshold = st.number_input(
+            "Harvest Threshold (%)", 
+            value=100.0, 
+            step=10.0, 
+            help="Wallet return % required to trigger skim (e.g. 100% = doubling account)."
+        )
+    with col_sa:
+        skim_percent = st.number_input(
+            "Skim Amount (% of Main Bank)", 
+            value=50.0, 
+            step=10.0, 
+            help="Percentage of main bank (starting balance) to skim back into Cold Bank."
+        )
+
 risk_percent = st.sidebar.number_input(
     "Margin / Risk per Trade (%)", 
     value=100.0, 
@@ -483,11 +519,21 @@ risk_percent = st.sidebar.number_input(
     max_value=100.0, 
     help="Percentage of your available balance to allocate as margin for each trade."
 )
-win_rate = st.sidebar.number_input("Win Rate (%)", value=60.0, step=1.0)
-n_trades = st.sidebar.number_input("Number of Trades", value=60, step=1)
+col_wr, col_nt = st.sidebar.columns(2)
+with col_wr:
+    win_rate = st.number_input("Win Rate (%)", value=60.0, step=1.0)
+with col_nt:
+    n_trades = st.number_input("Number of Trades", value=60, step=1)
+
+win_rate_logic = st.sidebar.radio(
+    "Win Rate Logic",
+    options=["🎲 Probabilistic (Pure Luck)", "🎯 Exact Count (Fixed)"],
+    index=1,
+    help="Probabilistic: 60% WR = 60% chance per trade. Exact: 60% WR = Exactly 60 wins out of 100 trades (shuffled)."
+)
 
 # --- Advanced Exit Settings ---
-with st.sidebar.expander("🎯 Exit Settings (TP Levels)", expanded=True):
+with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
     st.write("**Partial Take Profit Levels**")
     c1, c2 = st.columns(2)
     with c1:
@@ -517,12 +563,13 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels)", expanded=True):
         help="Percentage of LOSING trades that hit TP 1 before reversing to SL."
     )
 
-st.sidebar.subheader("Leverage & Fees")
-leverage = st.sidebar.number_input("Leverage (x)", value=50, step=1)
-maker_fee = st.sidebar.number_input("Maker Fee (%)", value=0.02, step=0.01, format="%.3f")
-taker_fee = st.sidebar.number_input("Taker Fee (%)", value=0.05, step=0.01, format="%.3f")
+st.sidebar.subheader("Order Types & Fees")
+col_mk, col_tk = st.sidebar.columns(2)
+with col_mk:
+    maker_fee = st.number_input("Maker Fee (%)", value=0.02, step=0.01, format="%.3f")
+with col_tk:
+    taker_fee = st.number_input("Taker Fee (%)", value=0.05, step=0.01, format="%.3f")
 
-st.sidebar.subheader("Order Types")
 entry_type = st.sidebar.selectbox("Entry Type", ["Limit (Maker)", "Market (Taker)"], index=1)
 tp_type = st.sidebar.selectbox("Take Profit Type", ["Limit (Maker)", "Market (Taker)"], index=0)
 sl_type = st.sidebar.selectbox("Stop Loss Type", ["Limit (Maker)", "Market (Taker)"], index=1)
@@ -538,7 +585,10 @@ if run_button:
         win_rate_logic,
         tp_targets,
         loss_fakeout_chance,
-        fakeout_logic
+        fakeout_logic,
+        enable_skim,
+        harvest_threshold,
+        skim_percent
     )
 
     if summary:
@@ -547,7 +597,9 @@ if run_button:
             
             # Row 1: Key Performance Metrics
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("Final Balance", f"${summary['final_balance']:,.2f}", delta=f"{summary['total_net_pnl']:,.2f}")
+            with c1:
+                st.metric("Final Balance", f"${summary['final_balance']:,.2f}", delta=f"{summary['total_net_pnl']:,.2f}")
+                st.caption(f"Total skimmed: {summary['total_skimmed']:,.2f}")
             c2.metric("Total Return", f"{summary['total_return_percent']:.2f}%")
             c3.metric("Trades Executed", f"{summary['num_trades_executed']}")
             c4.metric("Actual Win Rate", f"{summary['win_rate_actual_percent']:.1f}%")
