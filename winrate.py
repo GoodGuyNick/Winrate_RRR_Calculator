@@ -490,7 +490,7 @@ col_sb, col_lev = st.sidebar.columns(2)
 with col_sb:
     start_bal = st.number_input("Starting Balance", value=100.0, step=100.0)
 with col_lev:
-    leverage = st.number_input("Leverage (x)", value=50, step=1)
+    leverage = st.number_input("Leverage (x)", value=500, step=1)
 
 # --- Skim Vault System ---
 with st.sidebar.expander("🏦 Skim Vault System", expanded=False):
@@ -538,7 +538,7 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
     c1, c2 = st.columns(2)
     with c1:
         tp1_p = st.number_input("TP 1: Price %", value=0.0, step=0.1)
-        tp2_p = st.number_input("TP 2 Main: Price %", value=0.6, step=0.1)
+        tp2_p = st.number_input("TP 2 Main: Price %", value=0.06, step=0.1)
         tp3_p = st.number_input("TP 3: Price %", value=0.0, step=0.1)
     with c2:
         tp1_q = st.number_input("TP 1: Size %", value=0, step=5)
@@ -548,7 +548,7 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
     st.caption(f"Total Size to Close: {tp1_q + tp2_q + tp3_q}% (Should be 100%)")
     
     st.write("**Stop Loss Behavior**")
-    sl_perc = st.number_input("Stop Loss Distance (%)", value=0.3, step=0.1)
+    sl_perc = st.number_input("Stop Loss Distance (%)", value=0.03, step=0.1)
     
     fakeout_logic = st.radio(
         "Fakeout Logic",
@@ -566,12 +566,12 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
 st.sidebar.subheader("Order Types & Fees")
 col_mk, col_tk = st.sidebar.columns(2)
 with col_mk:
-    maker_fee = st.number_input("Maker Fee (%)", value=0.02, step=0.01, format="%.3f")
+    maker_fee = st.number_input("Maker Fee (%)", value=0.02, step=0.0001, format="%.5f")
 with col_tk:
-    taker_fee = st.number_input("Taker Fee (%)", value=0.05, step=0.01, format="%.3f")
+    taker_fee = st.number_input("Taker Fee (%)", value=0.00225, step=0.0001, format="%.5f")
 
 entry_type = st.sidebar.selectbox("Entry Type", ["Limit (Maker)", "Market (Taker)"], index=1)
-tp_type = st.sidebar.selectbox("Take Profit Type", ["Limit (Maker)", "Market (Taker)"], index=0)
+tp_type = st.sidebar.selectbox("Take Profit Type", ["Limit (Maker)", "Market (Taker)"], index=1)
 sl_type = st.sidebar.selectbox("Stop Loss Type", ["Limit (Maker)", "Market (Taker)"], index=1)
 
 # --- MAIN EXECUTION ---
@@ -643,7 +643,7 @@ if run_button:
                 theo_sign = "+" if summary['ev_per_trade_percent'] >= 0 else ""
                 st.caption(f"Theo: {theo_sign}{summary['ev_per_trade_percent']:.2f}% | Avg: ${summary['actual_ev_dollars']:,.2f}")
 
-            r2c4.metric("Fees Paid", f"${summary['total_fees_paid']:,.0f}")
+            r2c4.metric("Fees Paid", f"${summary['total_fees_paid']:,.2f}")
 
             with r2c5:
                 st.metric("Win / Loss Trades", f"{summary['wins']} / {summary['losses']}")
