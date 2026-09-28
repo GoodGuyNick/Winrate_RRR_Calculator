@@ -488,7 +488,7 @@ compound_rate = st.sidebar.slider(
 
 col_sb, col_lev = st.sidebar.columns(2)
 with col_sb:
-    start_bal = st.number_input("Starting Balance", value=100.0, step=100.0)
+    start_bal = st.number_input("Starting Balance", value=10.0, step=10.0)
 with col_lev:
     leverage = st.number_input("Leverage (x)", value=500, step=1)
 
