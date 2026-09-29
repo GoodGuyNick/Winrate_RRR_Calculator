@@ -537,9 +537,9 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
     st.write("**Partial Take Profit Levels**")
     c1, c2 = st.columns(2)
     with c1:
-        tp1_p = st.number_input("TP 1: Price %", value=0.0, step=0.01)
-        tp2_p = st.number_input("TP 2 Main: Price %", value=0.06, step=0.01)
-        tp3_p = st.number_input("TP 3: Price %", value=0.0, step=0.01)
+        tp1_p = st.number_input("TP 1: Price %", value=0.0, step=0.005, format="%.3f")
+        tp2_p = st.number_input("TP 2 Main: Price %", value=0.060, step=0.005, format="%.3f")
+        tp3_p = st.number_input("TP 3: Price %", value=0.0, step=0.005, format="%.3f")
     with c2:
         tp1_q = st.number_input("TP 1: Size %", value=0, step=5)
         tp2_q = st.number_input("TP 2 Main: Size %", value=100, step=5)
@@ -548,7 +548,7 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
     st.caption(f"Total Size to Close: {tp1_q + tp2_q + tp3_q}% (Should be 100%)")
     
     st.write("**Stop Loss Behavior**")
-    sl_perc = st.number_input("Stop Loss Distance (%)", value=0.03, step=0.01)
+    sl_perc = st.number_input("Stop Loss Distance (%)", value=0.035, step=0.005, format="%.3f")
     
     fakeout_logic = st.radio(
         "Fakeout Logic",
