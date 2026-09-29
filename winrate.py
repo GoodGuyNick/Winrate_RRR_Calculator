@@ -548,7 +548,7 @@ with st.sidebar.expander("🎯 Exit Settings (TP Levels & SL)", expanded=False):
     st.caption(f"Total Size to Close: {tp1_q + tp2_q + tp3_q}% (Should be 100%)")
     
     st.write("**Stop Loss Behavior**")
-    sl_perc = st.number_input("Stop Loss Distance (%)", value=0.035, step=0.005, format="%.3f")
+    sl_perc = st.number_input("Stop Loss Distance (%)", value=0.030, step=0.005, format="%.3f")
     
     fakeout_logic = st.radio(
         "Fakeout Logic",
